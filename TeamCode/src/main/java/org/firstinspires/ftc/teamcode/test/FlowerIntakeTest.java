@@ -48,16 +48,24 @@ public class FlowerIntakeTest extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad2.y) {
+        if (gamepad1.y) {
             flowerIntake.setUp();
         }
 
-        if (gamepad2.a) {
+        else if (gamepad1.a) {
+            flowerIntake.setZero();
+        }
+
+        else if (gamepad1.x) {
             flowerIntake.setDown();
         }
 
-        if (gamepad2.b) {
-            flowerIntake.switchPosition();
+        else if (gamepad1.dpad_down) {
+            flowerIntake.slightDown();
+        }
+
+        else if (gamepad1.dpad_up) {
+            flowerIntake.slightUp();
         }
     }
 }

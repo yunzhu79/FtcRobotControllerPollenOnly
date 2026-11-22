@@ -21,11 +21,7 @@ public class Drivetrain {
         rightBackDrive.setPower(0);
     }
 
-    public void drive(double x1, double y1, double rx1, double x2, double y2, double rx2) {
-        double x = x1 + x2;
-        double y = y1 + y2;
-        double rx = rx1 + rx2;
-
+    public void drive(double x, double y, double rx) {
         y = -y;
         rx = 0.8 * rx;
 

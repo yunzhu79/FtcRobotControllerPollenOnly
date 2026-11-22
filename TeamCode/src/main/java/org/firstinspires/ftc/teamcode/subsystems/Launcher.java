@@ -14,9 +14,10 @@ public class Launcher {
     private final double FEED_TIME_SECONDS = 0.12;
     private final double STOPPER_OPEN_DELAY_SECONDS = 0.5;
     private final double STOP_SPEED = 0.0;
-    private final double HALF_SPEED = 0.5;
+    private final double HALF_SPEED = 0.8;
     private final double FULL_SPEED = 1.0;
-    private final double TARGET_VELOCITY = 780;
+    private double targetVelocity = 750;
+    private static final double VELOCITY_TOLERANCE = 20.0;
     private static LaunchState launchState;
     private ElapsedTime launchTimer = new ElapsedTime();
     private static DcMotorEx launcher1 = null;
@@ -37,8 +38,14 @@ public class Launcher {
     }
 
     public void startLauncher() {
-        launcher1.setVelocity(TARGET_VELOCITY);
-        launcher2.setVelocity(TARGET_VELOCITY);
+        launcher1.setVelocity(targetVelocity);
+        launcher2.setVelocity(targetVelocity);
+    }
+
+    public void setTargetVelocity(double targetVelocity) {
+        this.targetVelocity = targetVelocity;
+        launcher1.setVelocity(targetVelocity);
+        launcher2.setVelocity(targetVelocity);
     }
 
     public void stopLauncher() {
@@ -57,7 +64,13 @@ public class Launcher {
     }
 
     public double getTargetVelocity() {
-        return TARGET_VELOCITY;
+        return targetVelocity;
+    }
+
+    /** Both flywheels must independently reach the target speed. */
+    public boolean isAtTargetVelocity() {
+        return Math.abs(launcher1.getVelocity() - targetVelocity) < VELOCITY_TOLERANCE
+                && Math.abs(launcher2.getVelocity() - targetVelocity) < VELOCITY_TOLERANCE;
     }
 
     public void launch(boolean shotRequested) {
@@ -65,14 +78,14 @@ public class Launcher {
             feeder.setPower(STOP_SPEED);
             intake.setPower(HALF_SPEED);
             launchStopper.setClose();
-            launcher1.setVelocity(TARGET_VELOCITY);
-            launcher2.setVelocity(TARGET_VELOCITY);
+            launcher1.setVelocity(targetVelocity);
+            launcher2.setVelocity(targetVelocity);
             launchState = LaunchState.SPIN_UP;
             launchTimer.reset();
         }
 
         if (launchState == LaunchState.SPIN_UP) {
-            if (Math.abs(getVelocity() - TARGET_VELOCITY) < 20) {
+            if (isAtTargetVelocity()) {
                 // Open the stopper first, but do not feed any balls yet.
                 launchStopper.setOpen();
                 launchState = LaunchState.WAIT_FOR_STOPPER;
