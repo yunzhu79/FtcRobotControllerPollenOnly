@@ -4,7 +4,6 @@ import com.arcrobotics.ftclib.controller.PIDFController;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.hardware.CRServo;
 
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
 
 /**
@@ -26,12 +25,11 @@ public class Turret {
     private double lowerLimit = Math.toRadians(-180.0);
     private double upperLimit = Math.toRadians(180.0);
     private static final double AT_LIMIT_TOL = Math.toRadians(2.0);
-    private static final double MAX_DEBT = Math.toRadians(90.0);
 
-    private double kP = 0.25;
+    private double kP = 0.1;
     private double kI = 0.0;
     private double kD = 0.0;
-    private double kV = 0.12;  // robot angular-velocity feedforward (power per rad/s)
+    private double kV = 0.035;  // robot angular-velocity feedforward (power per rad/s)
     private double kS = 0.1;  // static feedforward power
 
     private final CRServo turretServo1;
@@ -40,8 +38,6 @@ public class Turret {
     private final GoBildaPinpointDriver odo;
     private final PIDFController controller;
 
-    private double angleDebt = 0.0;
-    private double previousHeading = Double.NaN;
     private double requestedAngle = 0.0;
     private double lastError = 0.0;
 
@@ -105,10 +101,6 @@ public class Turret {
         return odo.getHeadingVelocity(UnnormalizedAngleUnit.RADIANS);
     }
 
-    public double getAngleDebt() {
-        return angleDebt;
-    }
-
     /**
      * Commands an angle relative to the startup encoder reference, in radians.
      * Call this every control loop for a moving target.
@@ -132,18 +124,9 @@ public class Turret {
         final double currentAngle = getAngle();
         updateVelocity(currentAngle);
 
-        // Single PIDF path: compensate for robot heading and track the target.
-        double desiredAngle = requestedAngle;
-        double heading = odo.getPosition().getHeading(AngleUnit.RADIANS);
-        if (!Double.isNaN(previousHeading)) {
-            double delta = normalizeRadians(heading - previousHeading);
-            desiredAngle -= delta;
-        }
-        previousHeading = heading;
-        desiredAngle += angleDebt;
+        // AutoAim already accounts for robot heading.
+        double clampedAngle = clamp(requestedAngle, lowerLimit, upperLimit);
 
-        double clampedAngle = clamp(desiredAngle, lowerLimit, upperLimit);
-        angleDebt = clamp(desiredAngle - clampedAngle, -MAX_DEBT, MAX_DEBT);
 
         double feedforward = -kV * getRobotAngularVelocity();
 
@@ -155,7 +138,7 @@ public class Turret {
         // Static-friction feedforward helps the CR servos overcome deadband.
         // Do not apply it inside the 2-degree tolerance to avoid hunting.
         if (Math.abs(lastError) > Math.toRadians(2.0)) {
-            feedforward += Math.signum(turretVelocity) * kS;
+            feedforward += Math.signum(lastError) * kS;
         }
         double power = clamp(pidPower + feedforward, -1.0, 1.0);
         if (Math.abs(lastError) <= Math.toRadians(2.0)) {
@@ -192,17 +175,9 @@ public class Turret {
         return Math.max(lo, Math.min(hi, n));
     }
 
-    private static double normalizeRadians(double a) {
-        while (a > Math.PI) a -= 2.0 * Math.PI;
-        while (a < -Math.PI) a += 2.0 * Math.PI;
-        return a;
-    }
-
     /** Reset controller history, not encoder counts or turret hardware zero. */
     public void resetPIDF() {
         controller.reset();
-        angleDebt = 0.0;
-        previousHeading = Double.NaN;
         lastError = 0.0;
     }
 
@@ -215,6 +190,8 @@ public class Turret {
         return Math.abs(lastError) < toleranceRadians;
     }
 
+    public double getLowerLimitRadians() { return lowerLimit; }
+    public double getUpperLimitRadians() { return upperLimit; }
     public double getError() { return lastError; }
     public double getKP() { return kP; }
     public double getKI() { return kI; }
