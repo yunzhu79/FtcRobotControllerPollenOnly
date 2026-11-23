@@ -33,6 +33,7 @@ public class Hardware {
     public static Servo launchStopperServo = null;
     public static CRServo turretServo1 = null;
     public static CRServo turretServo2 = null;
+    public static Servo rgbIndicator = null;
 
     public static void init(HardwareMap hardwareMap) {
         odo = hardwareMap.get(GoBildaPinpointDriver.class,"pinpoint");
@@ -49,6 +50,7 @@ public class Hardware {
         launchStopperServo = hardwareMap.get(Servo.class, "launch_stopper_servo");
         turretServo1 = hardwareMap.get(CRServo.class, "turret_servo1");
         turretServo2 = hardwareMap.get(CRServo.class, "turret_servo2");
+        rgbIndicator = hardwareMap.get(Servo.class, "rgbIndicator");
 
         leftFrontDrive.setDirection(REVERSE);
         rightFrontDrive.setDirection(FORWARD);

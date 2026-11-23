@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 public class Launcher {
-    private enum LaunchState {
+    public enum LaunchState {
         IDLE,
         SPIN_UP,
         WAIT_FOR_STOPPER,
@@ -48,7 +48,20 @@ public class Launcher {
         launcher2.setVelocity(targetVelocity);
     }
 
+    public void cancelShot() {
+        feeder.setPower(STOP_SPEED);
+        launchStopper.setClose();
+        intake.setPower(STOP_SPEED);
+        launchState = LaunchState.IDLE;
+        launchTimer.reset();
+    }
+
+    public double getFeederElapsedSeconds() {
+        return launchState == LaunchState.LAUNCH ? launchTimer.seconds() : -1.0;
+    }
+
     public void stopLauncher() {
+        cancelShot();
         launcher1.setVelocity(STOP_SPEED);
         launcher2.setVelocity(STOP_SPEED);
         launchStopper.setClose();
@@ -74,6 +87,14 @@ public class Launcher {
     }
 
     public void launch(boolean shotRequested) {
+        launchInternal(shotRequested, true, false);
+    }
+
+    public void launch(boolean shotRequested, boolean aimReady) {
+        launchInternal(shotRequested, aimReady, true);
+    }
+
+    private void launchInternal(boolean shotRequested, boolean aimReady, boolean gated) {
         if (launchState == LaunchState.IDLE && shotRequested) {
             feeder.setPower(STOP_SPEED);
             intake.setPower(HALF_SPEED);
@@ -85,14 +106,18 @@ public class Launcher {
         }
 
         if (launchState == LaunchState.SPIN_UP) {
-            if (isAtTargetVelocity()) {
+            if (isAtTargetVelocity() && aimReady) {
                 // Open the stopper first, but do not feed any balls yet.
                 launchStopper.setOpen();
                 launchState = LaunchState.WAIT_FOR_STOPPER;
                 launchTimer.reset();
             }
         } else if (launchState == LaunchState.WAIT_FOR_STOPPER) {
-            if (launchTimer.seconds() >= STOPPER_OPEN_DELAY_SECONDS) {
+            if (gated && (!aimReady || !isAtTargetVelocity())) {
+                launchStopper.setClose();
+                launchState = LaunchState.SPIN_UP;
+                launchTimer.reset();
+            } else if (launchTimer.seconds() >= STOPPER_OPEN_DELAY_SECONDS) {
                 // The stopper has had 0.5 seconds to move clear.
                 feeder.setPower(FULL_SPEED);
                 launchState = LaunchState.LAUNCH;

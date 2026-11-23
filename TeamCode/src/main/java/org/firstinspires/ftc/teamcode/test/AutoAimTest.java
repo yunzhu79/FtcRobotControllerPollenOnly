@@ -4,6 +4,7 @@ import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.subsystems.AutoAim;
@@ -14,6 +15,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Launcher;
 import org.firstinspires.ftc.teamcode.subsystems.InTake;
 import org.firstinspires.ftc.teamcode.subsystems.LaunchStopper;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
+import org.firstinspires.ftc.teamcode.subsystems.RGBIndicator;
 
 /** Pinpoint-only autoaim and launcher shooting test. */
 @TeleOp(name="AutoAim Test", group="Test")
@@ -23,6 +25,12 @@ public class AutoAimTest extends OpMode {
     public static double START_Y_IN = 1.0;
     public static double START_HEADING_DEG = 90.0;
     public static double FIXED_LAUNCHER_TICKS_PER_SEC = 750.0;
+    public static double MAX_LINEAR_SPEED_IN_PER_SEC = 2.0;
+    public static double MAX_ANGULAR_SPEED_DEG_PER_SEC = 5.0;
+    public static double MIN_SHOOT_Y_IN = 0.0;
+    public static double MAX_SHOOT_Y_IN = 20.0;
+    private RGBIndicator rgbIndicator;
+    private boolean greenOn = false;
     private GoBildaPinpointDriver odo;
     private Drivetrain drive;
     private Turret turret;
@@ -36,6 +44,8 @@ public class AutoAimTest extends OpMode {
 
     @Override public void init() {
         Hardware.init(hardwareMap);
+        rgbIndicator = new RGBIndicator();
+        rgbIndicator.setRed();
         odo = Hardware.odo;
         // Offsets, encoder resolution and directions are configured in Hardware.init().
         // Reset the Pinpoint exactly once, while the robot is stationary.
@@ -79,8 +89,8 @@ public class AutoAimTest extends OpMode {
     }
 
     @Override public void start() {
-        flowerIntake.setUp();
         if (!poseInitialized) return;
+        flowerIntake.setUp();
         intake.startIntake();
         launcher.setTargetVelocity(FIXED_LAUNCHER_TICKS_PER_SEC);
         launcher.startLauncher();
@@ -88,6 +98,7 @@ public class AutoAimTest extends OpMode {
     }
 
     @Override public void loop() {
+        if (flowerIntake == null) return;
         flowerIntake.setUp(); // Reassert UP every loop; no gamepad control.
         boolean a = gamepad1.a;
         if (a && !oldA && poseInitialized) { aiming = !aiming; if (!aiming) turret.stop(); }
@@ -100,6 +111,7 @@ public class AutoAimTest extends OpMode {
         odo.update();
         if (poseInitialized) drive.drive(gamepad1.left_stick_x, gamepad1.left_stick_y, gamepad1.right_stick_x);
         if (!poseInitialized) {
+            setReadyIndicator(false);
             drive.drive(0, 0, 0);
             turret.stop();
             telemetry.addLine("Pinpoint pose not initialized. Restart OpMode.");
@@ -114,6 +126,7 @@ public class AutoAimTest extends OpMode {
         // A right-bumper press triggers a shot; holding it does not retrigger.
         launcher.launch(gamepad1.rightBumperWasPressed());
         Pose2D pose = odo.getPosition();
+        updateReadyIndicator(pose);
         telemetry.addData("Pinpoint status", odo.getDeviceStatus());
         telemetry.addData("Selected CELL", aim.getTarget());
         telemetry.addLine("Dpad UP Blue1 | RIGHT Blue2 | DOWN Red1 | LEFT Red2");
@@ -139,10 +152,43 @@ public class AutoAimTest extends OpMode {
         telemetry.update();
     }
 
+    private void updateReadyIndicator(Pose2D pose) {
+        boolean pinpointReady = odo.getDeviceStatus() == GoBildaPinpointDriver.DeviceStatus.READY;
+        // Pinpoint velocity components use inches/s and degrees/s after conversion.
+        double vx = odo.getVelX(DistanceUnit.INCH);
+        double vy = odo.getVelY(DistanceUnit.INCH);
+        double linearSpeed = Math.hypot(vx, vy);
+        double angularSpeed = Math.abs(odo.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
+        boolean stationary = pinpointReady
+                && linearSpeed <= MAX_LINEAR_SPEED_IN_PER_SEC
+                && angularSpeed <= MAX_ANGULAR_SPEED_DEG_PER_SEC;
+        double y = pose.getY(DistanceUnit.INCH);
+        boolean inZone = y >= MIN_SHOOT_Y_IN && y <= MAX_SHOOT_Y_IN;
+        boolean turretAimed = aiming && pinpointReady && aim.hasValidTarget()
+                && aim.isWithinLimits() && aim.isAtTarget();
+        boolean ready = turretAimed && stationary && inZone;
+        setReadyIndicator(ready);
+        telemetry.addData("Linear speed in/s", "%.2f", linearSpeed);
+        telemetry.addData("Angular speed deg/s", "%.2f", angularSpeed);
+        telemetry.addData("Robot stationary", stationary);
+        telemetry.addData("Inside shooting zone", inZone);
+        telemetry.addData("Turret aimed", turretAimed);
+        telemetry.addData("RGB indicator", ready ? "GREEN" : "RED");
+    }
+
+    private void setReadyIndicator(boolean ready) {
+        // Write to the servo only when the indicator changes color.
+        if (ready == greenOn) return;
+        if (ready) rgbIndicator.setGreen();
+        else rgbIndicator.setRed();
+        greenOn = ready;
+    }
+
     @Override public void stop() {
-        drive.drive(0, 0, 0);
-        turret.stop();
-        launcher.stopLauncher();
-        intake.stopIntake();
+        if (rgbIndicator != null) rgbIndicator.setOff();
+        if (drive != null) drive.drive(0, 0, 0);
+        if (turret != null) turret.stop();
+        if (launcher != null) launcher.stopLauncher();
+        if (intake != null) intake.stopIntake();
     }
 }
