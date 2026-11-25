@@ -15,6 +15,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * The OpMode must call Hardware.odo.update() before calling update().
  * Does not control launcher speed, feed balls, or compensate for ball flight motion.
  * Requires the updated Turret.java that accepts absolute robot-relative angles.
+ * Reads the turret encoder once per loop (inside turret.update()).
  */
 public class AutoAim {
     public enum Target { RED_1, RED_2, BLUE_1, BLUE_2 }
@@ -113,7 +114,7 @@ public class AutoAim {
                 - Math.toRadians(TURRET_ZERO_OFFSET_DEG));
 
         // Choose the closest equivalent angle that lies within mechanical limits.
-        double current = turret.getAngle();
+        double current = turret.getLastAngle();  // no extra encoder read
         double lower = turret.getLowerLimitRadians();
         double upper = turret.getUpperLimitRadians();
         double best = Double.NaN;
@@ -138,7 +139,7 @@ public class AutoAim {
 
         targetTurretRadians = best;
         turret.rotateUsingPIDF(targetTurretRadians);
-        errorRadians = targetTurretRadians - turret.getAngle();
+        errorRadians = turret.getError();  // target minus the angle used by update()
     }
 
     public double getDistanceInches() { return distanceInches; }

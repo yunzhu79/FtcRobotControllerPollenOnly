@@ -8,6 +8,7 @@ import static com.qualcomm.robotcore.hardware.DcMotorSimple.Direction.REVERSE;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -36,6 +37,13 @@ public class Hardware {
     public static Servo rgbIndicator = null;
 
     public static void init(HardwareMap hardwareMap) {
+        // AUTO bulk caching: hub reads (encoders, velocities) are cached and refreshed
+        // automatically, so a loop does not pay one hub round-trip per read. Safe for every
+        // OpMode (no clearBulkCache() calls needed). Read each encoder once per loop.
+        for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        }
+
         odo = hardwareMap.get(GoBildaPinpointDriver.class,"pinpoint");
         leftFrontDrive = hardwareMap.get(DcMotorEx.class, "left_front_drive");
         rightFrontDrive = hardwareMap.get(DcMotorEx.class, "right_front_drive");

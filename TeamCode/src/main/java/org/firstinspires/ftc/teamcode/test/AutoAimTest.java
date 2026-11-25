@@ -41,8 +41,10 @@ public class AutoAimTest extends OpMode {
     private boolean aiming = false;
     private boolean oldA;
     private boolean poseInitialized = false;
+    private long lastLoopNanos = 0L;
 
     @Override public void init() {
+        telemetry.setMsTransmissionInterval(50);
         Hardware.init(hardwareMap);
         rgbIndicator = new RGBIndicator();
         rgbIndicator.setRed();
@@ -99,6 +101,9 @@ public class AutoAimTest extends OpMode {
 
     @Override public void loop() {
         if (flowerIntake == null) return;
+        long nowNanos = System.nanoTime();
+        double loopMs = lastLoopNanos == 0L ? 0.0 : (nowNanos - lastLoopNanos) * 1e-6;
+        lastLoopNanos = nowNanos;
         flowerIntake.setUp(); // Reassert UP every loop; no gamepad control.
         boolean a = gamepad1.a;
         if (a && !oldA && poseInitialized) { aiming = !aiming; if (!aiming) turret.stop(); }
@@ -137,11 +142,13 @@ public class AutoAimTest extends OpMode {
         telemetry.addData("Robot heading deg", "%.1f", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Hive distance in", "%.1f", aim.getDistanceInches());
         telemetry.addData("Hive bearing deg", "%.1f", aim.getBearingDegrees());
-        telemetry.addData("Turret actual deg", "%.1f", turret.getAngleDegrees());
+        telemetry.addData("OpMode loop ms", "%.1f", loopMs);
+        telemetry.addData("Turret actual deg", "%.1f", turret.getLastAngleDegrees());
+        telemetry.addData("Turret vel deg/s", "%.1f", Math.toDegrees(turret.getVelocity()));
         telemetry.addData("Turret target deg", "%.1f", aim.getTargetTurretDegrees());
         telemetry.addData("Turret error deg", "%.1f", aim.getErrorDegrees());
-        telemetry.addData("Turret kP / kV / kS", "%.2f / %.2f / %.2f",
-                turret.getKP(), turret.getKV(), turret.getKS());
+        telemetry.addData("Turret kP / kD / kV / kS", "%.3f / %.3f / %.3f / %.3f",
+                turret.getKP(), turret.getKD(), turret.getKV(), turret.getKS());
         telemetry.addData("Within turret limits", aim.isWithinLimits());
         telemetry.addData("Aligned", aim.isAtTarget());
         telemetry.addData("Launcher state", launcher.getLaunchState());
