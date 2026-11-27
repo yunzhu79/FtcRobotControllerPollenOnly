@@ -8,6 +8,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.subsystems.AutoAim;
+import org.firstinspires.ftc.teamcode.subsystems.AutoDistance;
 import org.firstinspires.ftc.teamcode.subsystems.Drivetrain;
 import org.firstinspires.ftc.teamcode.subsystems.FlowerIntake;
 import org.firstinspires.ftc.teamcode.subsystems.Hardware;
@@ -17,14 +18,19 @@ import org.firstinspires.ftc.teamcode.subsystems.LaunchStopper;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.teamcode.subsystems.RGBIndicator;
 
-/** Pinpoint-only autoaim and launcher shooting test. */
+/**
+ * Pinpoint-only autoaim + auto distancing + launcher shooting test.
+ * Flywheel speed follows the robot pose vs the selected CELL (AutoAim.getShooterVelocity()).
+ * X switches the auto-distance model: distance only <-> distance + angle.
+ */
 @TeleOp(name="AutoAim Test", group="Test")
 public class AutoAimTest extends OpMode {
     // Set to the robot's actual start pose in the SAME field coordinate system.
     public static double START_X_IN = 55.0;
-    public static double START_Y_IN = 1.0;
+    public static double START_Y_IN = 10.5;
     public static double START_HEADING_DEG = 90.0;
-    public static double FIXED_LAUNCHER_TICKS_PER_SEC = 750.0;
+    /** Used only until the first valid distance is available. */
+    public static double FALLBACK_LAUNCHER_TICKS_PER_SEC = 750.0;
     public static double MAX_LINEAR_SPEED_IN_PER_SEC = 2.0;
     public static double MAX_ANGULAR_SPEED_DEG_PER_SEC = 5.0;
     public static double MIN_SHOOT_Y_IN = 0.0;
@@ -39,9 +45,10 @@ public class AutoAimTest extends OpMode {
     private FlowerIntake flowerIntake;
     private AutoAim aim;
     private boolean aiming = false;
-    private boolean oldA;
+    private boolean oldA, oldX;
     private boolean poseInitialized = false;
     private long lastLoopNanos = 0L;
+    private double flywheelTarget = FALLBACK_LAUNCHER_TICKS_PER_SEC;
 
     @Override public void init() {
         telemetry.setMsTransmissionInterval(50);
@@ -85,7 +92,7 @@ public class AutoAimTest extends OpMode {
         telemetry.addData("Pose assigned", poseInitialized);
         telemetry.addData("Start pose requested", "%.1f / %.1f / %.1f",
                 START_X_IN, START_Y_IN, START_HEADING_DEG);
-        telemetry.addLine("START: intake + launcher + aim | A toggle aim | D-pad CELL | RB shoot");
+        telemetry.addLine("START: intake + launcher + aim | A toggle aim | D-pad CELL | RB shoot | X model");
         if (!poseInitialized) telemetry.addLine("Pinpoint not READY: STOP and re-INIT after checking device");
         telemetry.update();
     }
@@ -94,7 +101,8 @@ public class AutoAimTest extends OpMode {
         if (!poseInitialized) return;
         flowerIntake.setUp();
         intake.startIntake();
-        launcher.setTargetVelocity(FIXED_LAUNCHER_TICKS_PER_SEC);
+        flywheelTarget = FALLBACK_LAUNCHER_TICKS_PER_SEC;
+        launcher.setTargetVelocity(flywheelTarget);
         launcher.startLauncher();
         aiming = true;
     }
@@ -113,6 +121,9 @@ public class AutoAimTest extends OpMode {
         else if (gamepad1.dpad_down) aim.setTarget(AutoAim.Target.RED_1);
         else if (gamepad1.dpad_left) aim.setTarget(AutoAim.Target.RED_2);
         oldA = a;
+        boolean xBtn = gamepad1.x;
+        if (xBtn && !oldX) AutoDistance.USE_ANGLE_TERM = !AutoDistance.USE_ANGLE_TERM;
+        oldX = xBtn;
         odo.update();
         if (poseInitialized) drive.drive(gamepad1.left_stick_x, gamepad1.left_stick_y, gamepad1.right_stick_x);
         if (!poseInitialized) {
@@ -124,14 +135,36 @@ public class AutoAimTest extends OpMode {
             telemetry.update();
             return;
         }
-        if (aiming && odo.getDeviceStatus() == GoBildaPinpointDriver.DeviceStatus.READY) aim.update();
-        else turret.stop();
+        boolean pinpointReady = odo.getDeviceStatus() == GoBildaPinpointDriver.DeviceStatus.READY;
+        if (aiming && pinpointReady) {
+            aim.update();                 // turret + distance + shooter velocity
+        } else {
+            turret.stop();
+            if (pinpointReady) aim.updateDistance();   // distance + shooter velocity only
+        }
+
+        // ---------------- Auto distancing ----------------
+        // Only change speed while not feeding, so a target change mid-burst
+        // doesn't look like a shot dip to the launcher.
+        Launcher.LaunchState state = launcher.getLaunchState();
+        boolean canRetarget = state == Launcher.LaunchState.IDLE
+                || state == Launcher.LaunchState.SPIN_UP;
+        double distanceVelocity = aim.getShooterVelocity();
+        if (pinpointReady && Double.isFinite(distanceVelocity) && canRetarget) {
+            flywheelTarget = distanceVelocity;
+            launcher.setTargetVelocity(flywheelTarget);
+        }
 
         // Match teleop.java: update launcher shooting state machine every loop.
         // A right-bumper press triggers a shot; holding it does not retrigger.
         launcher.launch(gamepad1.rightBumperWasPressed());
         Pose2D pose = odo.getPosition();
         updateReadyIndicator(pose);
+        telemetry.addData("Distance model (X to switch)", AutoDistance.modelName());
+        telemetry.addData("Flywheel target / actual", "%.0f / %.0f", flywheelTarget, launcher.getVelocity());
+        telemetry.addData("Hive distance in / shot angle deg", "%.1f / %.1f",
+                aim.getDistanceInches(), aim.getShotAngleDegrees());
+        if (!aim.isDistanceTrusted()) telemetry.addLine("Outside measured range (40-75 in, +/-50 deg): speed is a guess");
         telemetry.addData("Pinpoint status", odo.getDeviceStatus());
         telemetry.addData("Selected CELL", aim.getTarget());
         telemetry.addLine("Dpad UP Blue1 | RIGHT Blue2 | DOWN Red1 | LEFT Red2");
@@ -151,11 +184,12 @@ public class AutoAimTest extends OpMode {
                 turret.getKP(), turret.getKD(), turret.getKV(), turret.getKS());
         telemetry.addData("Within turret limits", aim.isWithinLimits());
         telemetry.addData("Aligned", aim.isAtTarget());
-        telemetry.addData("Launcher state", launcher.getLaunchState());
+        telemetry.addData("Launcher state", state);
         telemetry.addLine("Right bumper: shoot");
         telemetry.addData("Flywheel running", poseInitialized);
-        telemetry.addData("Flywheel target ticks/s", "%.0f", FIXED_LAUNCHER_TICKS_PER_SEC);
+        telemetry.addData("Flywheel target ticks/s", "%.0f (auto distance)", flywheelTarget);
         telemetry.addData("Flywheel actual ticks/s", "%.0f", launcher.getVelocity());
+        telemetry.addData("Flywheel at speed", launcher.isAtTargetVelocity());
         telemetry.update();
     }
 
@@ -173,7 +207,8 @@ public class AutoAimTest extends OpMode {
         boolean inZone = y >= MIN_SHOOT_Y_IN && y <= MAX_SHOOT_Y_IN;
         boolean turretAimed = aiming && pinpointReady && aim.hasValidTarget()
                 && aim.isWithinLimits() && aim.isAtTarget();
-        boolean ready = turretAimed && stationary && inZone;
+        boolean flywheelReady = launcher.isAtTargetVelocity();
+        boolean ready = turretAimed && stationary && inZone && flywheelReady;
         setReadyIndicator(ready);
         telemetry.addData("Linear speed in/s", "%.2f", linearSpeed);
         telemetry.addData("Angular speed deg/s", "%.2f", angularSpeed);

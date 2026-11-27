@@ -16,7 +16,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
 public class AutoAimNoDriveTest extends OpMode {
     // Set to the robot's actual start pose in the SAME field coordinate system.
     public static double START_X_IN = 55.0;
-    public static double START_Y_IN = 1.0;
+    public static double START_Y_IN = 7;
     public static double START_HEADING_DEG = 90.0;
     private GoBildaPinpointDriver odo;
     private Turret turret;

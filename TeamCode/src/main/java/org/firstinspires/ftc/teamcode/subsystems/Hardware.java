@@ -16,6 +16,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
@@ -35,6 +36,7 @@ public class Hardware {
     public static CRServo turretServo1 = null;
     public static CRServo turretServo2 = null;
     public static Servo rgbIndicator = null;
+    public static VoltageSensor voltageSensor = null;
 
     public static void init(HardwareMap hardwareMap) {
         // AUTO bulk caching: hub reads (encoders, velocities) are cached and refreshed
@@ -59,6 +61,7 @@ public class Hardware {
         turretServo1 = hardwareMap.get(CRServo.class, "turret_servo1");
         turretServo2 = hardwareMap.get(CRServo.class, "turret_servo2");
         rgbIndicator = hardwareMap.get(Servo.class, "rgbIndicator");
+        voltageSensor = hardwareMap.voltageSensor.iterator().next();
 
         leftFrontDrive.setDirection(REVERSE);
         rightFrontDrive.setDirection(FORWARD);
@@ -78,8 +81,9 @@ public class Hardware {
         rightFrontDrive.setZeroPowerBehavior(BRAKE);
         leftBackDrive.setZeroPowerBehavior(BRAKE);
         rightBackDrive.setZeroPowerBehavior(BRAKE);
-        launcher1.setZeroPowerBehavior(BRAKE);
-        launcher2.setZeroPowerBehavior(BRAKE);
+        // FLOAT: let the flywheel coast instead of the motors braking against its inertia.
+        launcher1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        launcher2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         intake.setZeroPowerBehavior(BRAKE);
         feeder.setZeroPowerBehavior(BRAKE);
 
@@ -91,13 +95,16 @@ public class Hardware {
         intake.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
         feeder.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
-        launcher1.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        launcher2.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        // The flywheel speed loop now runs in Launcher.update() (one controller, both motors).
+        // RUN_WITHOUT_ENCODER still lets us read launcher1's encoder velocity.
+        launcher1.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
+        launcher1.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
+        launcher2.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
 
         turretServo1.setPower(0.0);
         turretServo2.setPower(0.0);
 
-        odo.setOffsets(-1.5,0,DistanceUnit.INCH);
+        odo.setOffsets(-1.5,-6,DistanceUnit.INCH);
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.REVERSED);
     }

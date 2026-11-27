@@ -100,6 +100,10 @@ public class teleop extends OpMode {
         telemetry.addData("Launcher state", launcher.getLaunchState());
         telemetry.addData("Launcher target velocity", launcher.getTargetVelocity());
         telemetry.addData("Launcher velocity", launcher.getVelocity());
+        telemetry.addData("Burst ended because", launcher.getLastEndReason());
+        telemetry.addData("Burst length", "%.2f s", launcher.getBurstDuration());
+        telemetry.addData("Feed pauses (last burst)", launcher.getPauseCount());
+        telemetry.addData("Biggest dip (last burst)", "%.0f ticks/s", launcher.getMaxDip());
         telemetry.update();
     }
 

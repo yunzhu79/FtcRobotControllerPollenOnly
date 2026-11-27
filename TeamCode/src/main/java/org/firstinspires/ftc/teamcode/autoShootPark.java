@@ -140,6 +140,7 @@ public class autoShootPark extends LinearOpMode {
                 follower.update();
                 Hardware.odo.update();
                 turret.update();
+                launcher.update(); // Flywheel speed control must run every loop.
                 // Both machines progress each loop; drivetrain and launcher run concurrently.
                 mainMachine.update();
                 // Lower the first flower intake 1 second into the route, without blocking driving.

@@ -3,6 +3,7 @@ repositories {
     google() // Needed for androidx
     maven { url 'https://repo.dairy.foundation/releases/'}
     maven { url 'https://jitpack.io' }
+    maven { url 'https://maven.brott.dev/' }
 }
 
 dependencies {
@@ -18,5 +19,5 @@ dependencies {
     implementation 'com.pedropathing:revhub:3.0.2'
     implementation 'com.pedropathing:tuning:1.0.0'
     implementation 'com.github.StateFactory-Dev:StateFactory:0.3.9'
+    implementation 'com.acmerobotics.dashboard:dashboard:0.4.16'
 }
-

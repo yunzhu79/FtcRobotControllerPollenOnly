@@ -24,7 +24,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
 public class autoJustPark extends LinearOpMode {
     private enum Main { TO_PARK, DONE }
     private static final PoseFactory P = PoseFactory.degrees();
-    private static final Pose START_POS = P.of(78, 1, 90);
+    private static final Pose START_POS = P.of(78, 7, 90);
     private static final Pose PARK_POS = P.of(120, 30, 0);
 
     private Follower follower;
